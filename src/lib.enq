@@ -1818,14 +1818,6 @@ fn charge_decode(budget: mut DecodeBudget, items: usize, width: usize) -> Result
     budget.allocated += items * width
     ret Result::Ok(())
 }
-fn charge_record[Value](info: TypeInfo[Value], budget: mut DecodeBudget) -> Result[(), Error] {
-    charge_decode(budget, 1, 256)?
-    for field in info.fields() {
-        charge_decode(budget, 1, field.type().size_bound() + 16)?
-    }
-    ret Result::Ok(())
-}
-
 // The typed reader owns only its cursor and output allocation budget. Syntax
 // helpers return scalar tokens; no Json object/array tree is materialized.
 struct StreamReader {
@@ -1964,7 +1956,10 @@ fn stream_value[Value](info: TypeInfo[Value], reader: mut StreamReader, depth: u
     }
     match info.kind() {
         Kind::Struct => {
-            charge_record(info, reader.budget)?
+            charge_decode(reader.budget, 1, 256)?
+            for field in info.fields() {
+                charge_decode(reader.budget, 1, field.type().size_bound() + 16)?
+            }
             charge_decode(reader.budget, 1, 4096)?
             for field in info.fields() {
                 charge_decode(reader.budget, 1, 256)?
@@ -2021,7 +2016,10 @@ fn stream_value[Value](info: TypeInfo[Value], reader: mut StreamReader, depth: u
             }
         }
         Kind::Tuple => {
-            charge_record(info, reader.budget)?
+            charge_decode(reader.budget, 1, 256)?
+            for field in info.fields() {
+                charge_decode(reader.budget, 1, field.type().size_bound() + 16)?
+            }
             stream_expect(reader, 91)?
             let mut builder = reflect::Builder[Value]::new()
             let mut count = 0_usize
