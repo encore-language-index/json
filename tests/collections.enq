@@ -1,8 +1,9 @@
+import core::dict::Dict
 import core::option::Option
 import core::result::Result
 import core::vec::Vec
+
 import json
-import std::dict::Dict
 struct Envelope[T] {
     label: str
     value: T

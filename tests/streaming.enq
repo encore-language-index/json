@@ -1,0 +1,67 @@
+import core::dict::Dict
+import core::option::Option
+import core::vec::Vec
+
+import json::{DecodeOptions, decode, decode_with, parse_with_limits}
+import serialize::{ErrorKind, Limits}
+
+struct Child {
+    name: str
+    values: Vec[i64]
+}
+struct Document {
+    child: Child
+    metadata: Dict[str, str]
+    missing: Option[str]
+}
+fn main() -> u32 {
+    let source = "{\"unknown\":{\"nested\":[1,true,null]},\"metadata\":{\"key\":\"value\"},\"child\":{\"values\":[-9223372036854775808,9223372036854775807],\"name\":\"β\\u03b2\"}}"
+    match decode[Document](source) {
+        Ok(value) => {
+            if value.child.name != "ββ" || value.child.values.len() != 2 || value.metadata.get("key").unwrap_or("") != "value" || value.missing.is_some() {
+                ret 1
+            }
+        }
+        Err(_) => {
+            ret 2
+        }
+    }
+    if decode[Document](source + " trailing").is_ok() {
+        ret 3
+    }
+    if decode[Document]("{\"child\":{},\"child\":{}}").is_ok() {
+        ret 4
+    }
+    if decode[Vec[u32]]("[1,]").is_ok() || decode[Dict[str, u32]]("{\"x\":1,\"x\":2}").is_ok() {
+        ret 5
+    }
+    let limits = Limits::new().with_max_collection_items(1)
+    if parse_with_limits("[1,2]", limits).is_ok() {
+        ret 6
+    }
+    match decode_with[Vec[u32]]("[1,2]", DecodeOptions::new().with_limits(limits)) {
+        Err(error) => {
+            match error.kind() {
+                ErrorKind::LimitExceeded => {
+                }
+                _ => {
+                    ret 7
+                }
+            }
+        }
+        Ok(_) => {
+            ret 8
+        }
+    }
+    match decode[str]("\"\\b\\f\"") {
+        Ok(value) => {
+            if value.byte_len() != 2 || value.byte_at(0) != 8 || value.byte_at(1) != 12 {
+                ret 9
+            }
+        }
+        Err(_) => {
+            ret 10
+        }
+    }
+    ret 0
+}
