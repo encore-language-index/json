@@ -34,8 +34,9 @@ Integer decoding checks the requested width. Float conversion uses the C
 numeric locale and directly rounds to the requested float width. JSON rejects
 NaN and infinity; use `binary` when their exact IEEE representations matter.
 Typed decoding checks input, depth, collection and conservative allocation
-budgets before the parser builds its tree. The existing `Json`, `parse` and
-`stringify` APIs remain available.
+budgets while streaming into typed values. Numeric token storage is reserved
+before copying the token. The existing `Json`, `parse` and `stringify` APIs
+remain available.
 
 A field can use `#serialize(rename = "stored_name")` to override its JSON name.
 Duplicate serialized names are schema errors.

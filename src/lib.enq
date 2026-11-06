@@ -560,6 +560,12 @@ fn parse_unicode_escape(parser: JsonParser) -> Result[(str, JsonParser), ParseEr
 }
 
 fn parse_number(parser: JsonParser) -> Result[(Json, JsonParser), ParseError] {
+    let current = scan_number(parser)?
+    ret ok_json_parser(Json::Number(parser.source.slice_bytes(parser.index, current.index - parser.index)), current)
+}
+
+// Validate the number and find its end without copying its source text.
+fn scan_number(parser: JsonParser) -> Result[JsonParser, ParseError] {
     let start = parser.index
     let mut current = parser
     if peek_byte(current) == 45_u8 {
@@ -567,7 +573,7 @@ fn parse_number(parser: JsonParser) -> Result[(Json, JsonParser), ParseError] {
     }
 
     if current.index >= current.source.byte_len() {
-        ret Result[(Json, JsonParser), ParseError]::Err(ParseError::new("invalid number", start))
+        ret Result[JsonParser, ParseError]::Err(ParseError::new("invalid number", start))
     }
 
     if peek_byte(current) == 48_u8 {
@@ -580,13 +586,13 @@ fn parse_number(parser: JsonParser) -> Result[(Json, JsonParser), ParseError] {
             current = advance(current, 1_usize)
         }
     } else {
-        ret Result[(Json, JsonParser), ParseError]::Err(ParseError::new("invalid number", start))
+        ret Result[JsonParser, ParseError]::Err(ParseError::new("invalid number", start))
     }
 
     if peek_byte(current) == 46_u8 {
         current = advance(current, 1_usize)
         if !is_digit(peek_byte(current)) {
-            ret Result[(Json, JsonParser), ParseError]::Err(ParseError::new("invalid fraction", current.index))
+            ret Result[JsonParser, ParseError]::Err(ParseError::new("invalid fraction", current.index))
         }
         while current.index < current.source.byte_len() {
             if !is_digit(peek_byte(current)) {
@@ -603,7 +609,7 @@ fn parse_number(parser: JsonParser) -> Result[(Json, JsonParser), ParseError] {
                 current = next
             }
             Result[JsonParser, ParseError]::Err(err) => {
-                ret Result[(Json, JsonParser), ParseError]::Err(err)
+                ret Result[JsonParser, ParseError]::Err(err)
             }
         }
     } elif exp == 101_u8 {
@@ -612,12 +618,12 @@ fn parse_number(parser: JsonParser) -> Result[(Json, JsonParser), ParseError] {
                 current = next
             }
             Result[JsonParser, ParseError]::Err(err) => {
-                ret Result[(Json, JsonParser), ParseError]::Err(err)
+                ret Result[JsonParser, ParseError]::Err(err)
             }
         }
     }
 
-    ret ok_json_parser(Json::Number(parser.source.slice_bytes(start, current.index - start)), current)
+    ret Result[JsonParser, ParseError]::Ok(current)
 }
 
 fn parse_exponent(parser: JsonParser) -> Result[JsonParser, ParseError] {
@@ -1889,15 +1895,18 @@ fn stream_atom(reader: mut StreamReader) -> Result[Json, Error] {
         ret Result::Ok(Json::String(stream_string(reader)?))
     }
     if byte == 45 || is_digit(byte) {
-        let pair = match parse_number(reader.parser) {
-            Ok(pair) => pair
+        let next = match scan_number(reader.parser) {
+            Ok(next) => next
             Err(error) => {
                 ret Result::Err(invalid(error.message()).with_offset(error.position()))
             }
         }
-        charge_decode(reader.budget, pair.1.index - reader.parser.index, 1)?
-        reader.parser = pair.1
-        ret Result::Ok(pair.0)
+        let start = reader.parser.index
+        let length = next.index - start
+        charge_decode(reader.budget, length, 1)?
+        let value = Json::Number(reader.parser.source.slice_bytes(start, length))
+        reader.parser = next
+        ret Result::Ok(value)
     }
     if starts_at(reader.parser.source, "null", reader.parser.index) {
         reader.parser = advance(reader.parser, 4) ret Result::Ok(Json::Null)
