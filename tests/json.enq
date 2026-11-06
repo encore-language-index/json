@@ -1,11 +1,8 @@
 import core::option::Option
 import core::result::Result
 import core::testing::*
-import json::Json
-import json::ParseError
-import json::field
-import json::parse
-import json::stringify
+
+import json::{Json, ParseError, field, parse, stringify}
 
 fn expect_string(value: Json, expected: str) -> bool {
     match value.as_str() {

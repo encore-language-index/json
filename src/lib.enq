@@ -139,8 +139,11 @@ pub fn parse(source: str) -> Result[Json, ParseError] {
 }
 pub fn parse_with_limits(source: str, limits: Limits) -> Result[Json, ParseError] {
     match preflight(source, limits) {
-        Ok(_) => {}
-        Err(error) => { ret Result::Err(ParseError::new(error.message(), error.offset().unwrap_or(0))) }
+        Ok(_) => {
+        }
+        Err(error) => {
+            ret Result::Err(ParseError::new(error.message(), error.offset().unwrap_or(0)))
+        }
     }
     let parser = JsonParser {
         source, 0_usize
@@ -1166,10 +1169,11 @@ impl Debug for Json {
 
 //! Typed JSON codecs. Traversal is specialized from core::reflect metadata.
 import core::reflect
-import core::reflect::{TypeInfo, Kind, BuildError}
-import serialize::{Serializer, Deserializer, Error, ErrorKind, Limits}
 import core::dict::Dict
 import core::num::parse as parse_integer
+import core::reflect::{BuildError, Kind, TypeInfo}
+
+import serialize::{Deserializer, Error, ErrorKind, Limits, Serializer}
 
 extern fn encore_codec_text_builder_new(limit: usize) -> usize
 extern fn encore_codec_text_builder_ok(builder: usize) -> bool
@@ -1281,18 +1285,31 @@ pub fn encode_with[Value](value: Value, options: EncodeOptions) -> Result[str, E
     }
 }
 pub fn decode_with[Value](source: str, options: DecodeOptions) -> Result[Value, Error] {
-    if source.byte_len() > options.limits.max_input_bytes() { ret Result::Err(limit()) }
-    if !unsafe { encore_codec_str_utf8_valid(source) } { ret Result::Err(invalid("invalid UTF-8 document")) }
-    let mut reader = StreamReader { JsonParser { source, 0 }, DecodeBudget { options.limits, 0 } }
+    if source.byte_len() > options.limits.max_input_bytes() {
+        ret Result::Err(limit())
+    }
+    if !unsafe {
+        encore_codec_str_utf8_valid(source)
+    }
+    {
+        ret Result::Err(invalid("invalid UTF-8 document"))
+    }
+    let mut reader = StreamReader {
+        JsonParser { source, 0 }, DecodeBudget { options.limits, 0 }
+    }
     let value = match stream_value(reflect::type_info[Value](), reader, 0) {
         Ok(value) => value
         Err(error) => {
-            if error.offset().is_some() { ret Result::Err(error) }
+            if error.offset().is_some() {
+                ret Result::Err(error)
+            }
             ret Result::Err(error.with_offset(reader.parser.index))
         }
     }
     stream_peek(reader)
-    if reader.parser.index != source.byte_len() { ret Result::Err(stream_error(reader, "trailing characters after JSON value")) }
+    if reader.parser.index != source.byte_len() {
+        ret Result::Err(stream_error(reader, "trailing characters after JSON value"))
+    }
     ret Result::Ok(value)
 }
 
@@ -1554,7 +1571,9 @@ fn read_atom[Value](info: TypeInfo[Value], node: Json, budget: mut DecodeBudget,
         ret Result::Err(limit())
     }
     if info.is_template[Option]() {
-        if node.is_null() { ret Result::Ok(Option::None) }
+        if node.is_null() {
+            ret Result::Ok(Option::None)
+        }
         ret Result::Err(invalid("expected absent option"))
     }
     match info.kind() {
@@ -1712,7 +1731,9 @@ fn read_atom[Value](info: TypeInfo[Value], node: Json, budget: mut DecodeBudget,
             }
             ret Result::Ok(value)
         }
-        _ => { ret Result::Err(Error::new(ErrorKind::UnsupportedType, "cannot decode " + info.name())) }
+        _ => {
+            ret Result::Err(Error::new(ErrorKind::UnsupportedType, "cannot decode " + info.name()))
+        }
     }
 }
 fn read_number(node: Json) -> Result[str, Error] {
@@ -1797,10 +1818,12 @@ fn charge_record[Value](info: TypeInfo[Value], budget: mut DecodeBudget) -> Resu
     ret Result::Ok(())
 }
 
-
 // The typed reader owns only its cursor and output allocation budget. Syntax
 // helpers return scalar tokens; no Json object/array tree is materialized.
-struct StreamReader { parser: JsonParser budget: DecodeBudget }
+struct StreamReader {
+    parser: JsonParser
+    budget: DecodeBudget
+}
 fn stream_error(reader: StreamReader, message: str) -> Error {
     ret invalid(message).with_offset(reader.parser.index)
 }
@@ -1809,7 +1832,9 @@ fn stream_peek(reader: mut StreamReader) -> u8 {
     ret peek_byte(reader.parser)
 }
 fn stream_expect(reader: mut StreamReader, byte: u8) -> Result[(), Error] {
-    if stream_peek(reader) != byte { ret Result::Err(stream_error(reader, "unexpected JSON token")) }
+    if stream_peek(reader) != byte {
+        ret Result::Err(stream_error(reader, "unexpected JSON token"))
+    }
     reader.parser = advance(reader.parser, 1)
     ret Result::Ok(())
 }
@@ -1818,37 +1843,57 @@ fn stream_more(reader: mut StreamReader, closing: u8, count: usize) -> Result[bo
         reader.parser = advance(reader.parser, 1)
         ret Result::Ok(false)
     }
-    if count != 0 { stream_expect(reader, 44)? }
-    if stream_peek(reader) == closing { ret Result::Err(stream_error(reader, "trailing comma")) }
-    if count >= reader.budget.limits.max_collection_items() { ret Result::Err(limit()) }
+    if count != 0 {
+        stream_expect(reader, 44)?
+    }
+    if stream_peek(reader) == closing {
+        ret Result::Err(stream_error(reader, "trailing comma"))
+    }
+    if count >= reader.budget.limits.max_collection_items() {
+        ret Result::Err(limit())
+    }
     ret Result::Ok(true)
 }
 fn stream_string(reader: mut StreamReader) -> Result[str, Error] {
-    if stream_peek(reader) != 34 { ret Result::Err(stream_error(reader, "expected string")) }
+    if stream_peek(reader) != 34 {
+        ret Result::Err(stream_error(reader, "expected string"))
+    }
     let start = reader.parser.index
     let source = reader.parser.source
     let mut end = start + 1
     while end < source.byte_len() {
-        if source.byte_at(end) == 34 { break }
-        if source.byte_at(end) == 92 { end += 1 }
+        if source.byte_at(end) == 34 {
+            break
+        }
+        if source.byte_at(end) == 92 {
+            end += 1
+        }
         end += 1
     }
-    if end >= source.byte_len() { ret Result::Err(stream_error(reader, "unterminated string")) }
+    if end >= source.byte_len() {
+        ret Result::Err(stream_error(reader, "unterminated string"))
+    }
     charge_decode(reader.budget, end - start + 1, 2)?
     let pair = match parse_string(reader.parser) {
         Ok(pair) => pair
-        Err(error) => { ret Result::Err(invalid(error.message()).with_offset(error.position())) }
+        Err(error) => {
+            ret Result::Err(invalid(error.message()).with_offset(error.position()))
+        }
     }
     reader.parser = pair.1
     ret Result::Ok(pair.0)
 }
 fn stream_atom(reader: mut StreamReader) -> Result[Json, Error] {
     let byte = stream_peek(reader)
-    if byte == 34 { ret Result::Ok(Json::String(stream_string(reader)?)) }
+    if byte == 34 {
+        ret Result::Ok(Json::String(stream_string(reader)?))
+    }
     if byte == 45 || is_digit(byte) {
         let pair = match parse_number(reader.parser) {
             Ok(pair) => pair
-            Err(error) => { ret Result::Err(invalid(error.message()).with_offset(error.position())) }
+            Err(error) => {
+                ret Result::Err(invalid(error.message()).with_offset(error.position()))
+            }
         }
         charge_decode(reader.budget, pair.1.index - reader.parser.index, 1)?
         reader.parser = pair.1
@@ -1866,14 +1911,22 @@ fn stream_atom(reader: mut StreamReader) -> Result[Json, Error] {
     ret Result::Err(stream_error(reader, "expected scalar JSON value"))
 }
 fn stream_skip(reader: mut StreamReader, depth: usize) -> Result[(), Error] {
-    if depth > reader.budget.limits.max_depth() { ret Result::Err(limit()) }
+    if depth > reader.budget.limits.max_depth() {
+        ret Result::Err(limit())
+    }
     let byte = stream_peek(reader)
     if byte == 123 || byte == 91 {
         reader.parser = advance(reader.parser, 1)
-        let closing = if byte == 123 { 125_u8 } else { 93_u8 }
+        let closing = if byte == 123 {
+            125_u8
+        } else {
+            93_u8
+        }
         let mut count = 0_usize
         while stream_more(reader, closing, count)? {
-            if byte == 123 { stream_string(reader)? stream_expect(reader, 58)? }
+            if byte == 123 {
+                stream_string(reader)? stream_expect(reader, 58)?
+            }
             stream_skip(reader, depth + 1)?
             count += 1
         }
@@ -1882,13 +1935,23 @@ fn stream_skip(reader: mut StreamReader, depth: usize) -> Result[(), Error] {
     stream_atom(reader)? ret Result::Ok(())
 }
 fn stream_value[Value](info: TypeInfo[Value], reader: mut StreamReader, depth: usize) -> Result[Value, Error] {
-    if depth > reader.budget.limits.max_depth() { ret Result::Err(limit()) }
-    if info.is_template[Vec]() { ret stream_vec(info.argument(0), reader, depth) }
-    if info.is_template[Option]() { ret stream_option(info.argument(0), reader, depth) }
+    if depth > reader.budget.limits.max_depth() {
+        ret Result::Err(limit())
+    }
+    if info.is_template[Vec]() {
+        ret stream_vec(info.argument(0), reader, depth)
+    }
+    if info.is_template[Option]() {
+        ret stream_option(info.argument(0), reader, depth)
+    }
     if info.is_template[Dict]() {
         match info.argument(0).kind() {
-            Kind::String => { ret stream_dict(info.argument(1), reader, depth) }
-            _ => { ret Result::Err(Error::new(ErrorKind::UnsupportedType, "JSON object keys must be strings")) }
+            Kind::String => {
+                ret stream_dict(info.argument(1), reader, depth)
+            }
+            _ => {
+                ret Result::Err(Error::new(ErrorKind::UnsupportedType, "JSON object keys must be strings"))
+            }
         }
     }
     match info.kind() {
@@ -1905,18 +1968,26 @@ fn stream_value[Value](info: TypeInfo[Value], reader: mut StreamReader, depth: u
                 stream_expect(reader, 58)?
                 match names.get(name) {
                     Some(index) => {
-                        if seen.contains_key(index) { ret Result::Err(Error::new(ErrorKind::DuplicateField, "duplicate field").at(name)) }
+                        if seen.contains_key(index) {
+                            ret Result::Err(Error::new(ErrorKind::DuplicateField, "duplicate field").at(name))
+                        }
                         seen.insert(index, true)
                         for field in info.fields() {
                             if field.index() == index {
                                 match stream_value(field.type(), reader, depth + 1) {
-                                    Ok(value) => { builder.set(field, value) }
-                                    Err(error) => { ret Result::Err(error.at(name)) }
+                                    Ok(value) => {
+                                        builder.set(field, value)
+                                    }
+                                    Err(error) => {
+                                        ret Result::Err(error.at(name))
+                                    }
                                 }
                             }
                         }
                     }
-                    None => { stream_skip(reader, depth + 1)? }
+                    None => {
+                        stream_skip(reader, depth + 1)?
+                    }
                 }
                 count += 1
             }
@@ -1930,8 +2001,12 @@ fn stream_value[Value](info: TypeInfo[Value], reader: mut StreamReader, depth: u
                 }
             }
             match builder.finish() {
-                Ok(value) => { ret Result::Ok(value) }
-                Err(_) => { ret Result::Err(invalid("incomplete object")) }
+                Ok(value) => {
+                    ret Result::Ok(value)
+                }
+                Err(_) => {
+                    ret Result::Err(invalid("incomplete object"))
+                }
             }
         }
         Kind::Tuple => {
@@ -1940,43 +2015,66 @@ fn stream_value[Value](info: TypeInfo[Value], reader: mut StreamReader, depth: u
             let mut builder = reflect::Builder[Value]::new()
             let mut count = 0_usize
             for field in info.fields() {
-                if !stream_more(reader, 93, count)? { ret Result::Err(invalid("tuple is too short")) }
+                if !stream_more(reader, 93, count)? {
+                    ret Result::Err(invalid("tuple is too short"))
+                }
                 match stream_value(field.type(), reader, depth + 1) {
-                    Ok(value) => { builder.set(field, value) }
-                    Err(error) => { ret Result::Err(error.at(field.name())) }
+                    Ok(value) => {
+                        builder.set(field, value)
+                    }
+                    Err(error) => {
+                        ret Result::Err(error.at(field.name()))
+                    }
                 }
                 count += 1
             }
-            if stream_more(reader, 93, count)? { ret Result::Err(invalid("tuple is too long")) }
+            if stream_more(reader, 93, count)? {
+                ret Result::Err(invalid("tuple is too long"))
+            }
             match builder.finish() {
-                Ok(value) => { ret Result::Ok(value) }
-                Err(_) => { ret Result::Err(invalid("incomplete tuple")) }
+                Ok(value) => {
+                    ret Result::Ok(value)
+                }
+                Err(_) => {
+                    ret Result::Err(invalid("incomplete tuple"))
+                }
             }
         }
         Kind::Enum => {
             if stream_peek(reader) == 34 {
                 let name = stream_string(reader)?
                 for variant in info.variants() {
-                    if !variant.has_payload() && name == variant.name() { ret Result::Ok(variant.construct(())) }
+                    if variant.has_payload() {
+                    } else {
+                        if name == variant.name() {
+                            ret Result::Ok(variant.construct(()))
+                        }
+                    }
                 }
             } else {
                 stream_expect(reader, 123)?
                 let name = stream_string(reader)?
                 stream_expect(reader, 58)?
                 for variant in info.variants() {
-                    if variant.has_payload() && name == variant.name() {
-                        let payload = match stream_value(variant.type(), reader, depth + 1) {
-                            Ok(value) => value
-                            Err(error) => { ret Result::Err(error.at(name)) }
+                    if variant.has_payload() {
+                        if name == variant.name() {
+                            let payload = match stream_value(variant.type(), reader, depth + 1) {
+                                Ok(value) => value
+                                Err(error) => {
+                                    ret Result::Err(error.at(name))
+                                }
+                            }
+                            stream_expect(reader, 125)?
+                            ret Result::Ok(variant.construct(payload))
                         }
-                        stream_expect(reader, 125)?
-                        ret Result::Ok(variant.construct(payload))
                     }
                 }
             }
             ret Result::Err(Error::new(ErrorKind::UnknownVariant, "unknown enum variant"))
         }
-        _ => { ret read_atom(info, stream_atom(reader)?, reader.budget, depth) }
+        _ => {
+            ret read_atom(info, stream_atom(reader)?, reader.budget, depth)
+        }
     }
 }
 fn stream_vec[Item](info: TypeInfo[Item], reader: mut StreamReader, depth: usize) -> Result[Vec[Item], Error] {
@@ -1987,8 +2085,12 @@ fn stream_vec[Item](info: TypeInfo[Item], reader: mut StreamReader, depth: usize
     while stream_more(reader, 93, count)? {
         charge_decode(reader.budget, 2, info.size_bound() + 16)?
         match stream_value(info, reader, depth + 1) {
-            Ok(value) => { out.push(value) }
-            Err(error) => { ret Result::Err(error.at(Debug::fmt(count))) }
+            Ok(value) => {
+                out.push(value)
+            }
+            Err(error) => {
+                ret Result::Err(error.at(Debug::fmt(count)))
+            }
         }
         count += 1
     }
@@ -2009,11 +2111,17 @@ fn stream_dict[Item](info: TypeInfo[Item], reader: mut StreamReader, depth: usiz
     while stream_more(reader, 125, count)? {
         let name = stream_string(reader)?
         stream_expect(reader, 58)?
-        if out.contains_key(name) { ret Result::Err(Error::new(ErrorKind::DuplicateField, "duplicate dictionary key").at(name)) }
+        if out.contains_key(name) {
+            ret Result::Err(Error::new(ErrorKind::DuplicateField, "duplicate dictionary key").at(name))
+        }
         charge_decode(reader.budget, 2, info.size_bound() + 128)?
         match stream_value(info, reader, depth + 1) {
-            Ok(value) => { out.insert(name, value) }
-            Err(error) => { ret Result::Err(error.at(name)) }
+            Ok(value) => {
+                out.insert(name, value)
+            }
+            Err(error) => {
+                ret Result::Err(error.at(name))
+            }
         }
         count += 1
     }
