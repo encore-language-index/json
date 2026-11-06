@@ -2,8 +2,8 @@
 name = "json"
 version = "0.0.4"
 repository = "https://github.com/encore-language-index/json"
-encore = ">=0.1.6"
+encore = ">=0.1.14"
 description = "JSON parser and formatter for Encore"
 readme = "README.md"
 licence = "MIT"
-dependencies = ["path@../std", "path@../serialize"]
+dependencies = [ "path@../serialize"]

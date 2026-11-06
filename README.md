@@ -48,3 +48,11 @@ and edit this package under `packages/json/`. Sibling `path@` dependencies
 are resolved from that checkout. Encore CI tests the exact package commits
 with the compiler on all supported native targets. Published package archives
 rewrite path dependencies to exact index versions.
+
+Typed `decode`/`decode_with` now stream directly from the input cursor into
+reflected output values, without an intermediate Json object/array tree or a
+structural preflight pass. Reflected field names use a hash index. Unknown fields
+are validated and skipped. Scalar token helpers are shared with the DOM parser.
+`parse_with_limits` applies serialize::Limits to ordinary DOM parsing; `parse`
+uses the default limits. Collections and checked number parsing come from core;
+the package has no std/platform dependency.
