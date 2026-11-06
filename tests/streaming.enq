@@ -54,8 +54,14 @@ fn main() -> u32 {
         }
     }
     match decode[str]("\"\\b\\f\"") {
-        Ok(value) => { if value.byte_len() != 2 || value.byte_at(0) != 8 || value.byte_at(1) != 12 { ret 9 } }
-        Err(_) => { ret 10 }
+        Ok(value) => {
+            if value.byte_len() != 2 || value.byte_at(0) != 8 || value.byte_at(1) != 12 {
+                ret 9
+            }
+        }
+        Err(_) => {
+            ret 10
+        }
     }
     ret 0
 }

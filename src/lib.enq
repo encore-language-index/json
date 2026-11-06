@@ -431,13 +431,21 @@ fn parse_string(parser: JsonParser) -> Result[(str, JsonParser), ParseError] {
                 continue
             }
             if esc == 98_u8 {
-                text_builder_append(builder, unsafe { encore_str_from_codepoint(8) })
+                text_builder_append(builder, unsafe {
+                        encore_str_from_codepoint(8)
+                    }
+                    ,
+                )
                 index += 2_usize
                 segment_start = index
                 continue
             }
             if esc == 102_u8 {
-                text_builder_append(builder, unsafe { encore_str_from_codepoint(12) })
+                text_builder_append(builder, unsafe {
+                        encore_str_from_codepoint(12)
+                    }
+                    ,
+                )
                 index += 2_usize
                 segment_start = index
                 continue
