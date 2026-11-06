@@ -2091,7 +2091,11 @@ fn stream_vec[Item](info: TypeInfo[Item], reader: mut StreamReader, depth: usize
     let mut count = 0_usize
     while stream_more(reader, 93, count)? {
         if out.len() == out.capacity() {
-            let capacity = if out.capacity() == 0 { 4_usize } else { out.capacity() * 2 }
+            let capacity = if out.capacity() == 0 {
+                4_usize
+            } else {
+                out.capacity() * 2
+            }
             charge_decode(reader.budget, capacity, info.size_bound() + 16)?
         }
         match stream_value(info, reader, depth + 1) {
@@ -2125,7 +2129,11 @@ fn stream_dict[Item](info: TypeInfo[Item], reader: mut StreamReader, depth: usiz
             ret Result::Err(Error::new(ErrorKind::DuplicateField, "duplicate dictionary key").at(name))
         }
         if out.len() == out.capacity() {
-            let capacity = if out.capacity() == 0 { 4_usize } else { out.capacity() * 2 }
+            let capacity = if out.capacity() == 0 {
+                4_usize
+            } else {
+                out.capacity() * 2
+            }
             charge_decode(reader.budget, capacity, info.size_bound() + 128)?
         }
         match stream_value(info, reader, depth + 1) {
