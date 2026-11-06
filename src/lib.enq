@@ -1222,6 +1222,16 @@ struct DecodeBudget {
     allocated: usize
 }
 
+impl for DecodeBudget {
+    pub fn charge(self: mut Self, items: usize, width: usize) -> Result[(), Error] {
+        if width != 0 && items >(self.limits.max_allocation_bytes() - self.allocated) / width {
+            ret Result::Err(limit())
+        }
+        self.allocated += items * width
+        ret Result::Ok(())
+    }
+}
+
 impl for EncodeOptions {
     pub fn new() -> Self {
         ret Self { 0, Limits::new() }
@@ -1817,13 +1827,6 @@ fn record_schema[Value](info: TypeInfo[Value]) -> Result[(), Error] {
     schema_index(info)? ret Result::Ok(())
 }
 
-fn charge_decode(budget: mut DecodeBudget, items: usize, width: usize) -> Result[(), Error] {
-    if width != 0 && items >(budget.limits.max_allocation_bytes() - budget.allocated) / width {
-        ret Result::Err(limit())
-    }
-    budget.allocated += items * width
-    ret Result::Ok(())
-}
 // The typed reader owns only its cursor and output allocation budget. Syntax
 // helpers return scalar tokens; no Json object/array tree is materialized.
 struct StreamReader {
@@ -1879,7 +1882,7 @@ fn stream_string(reader: mut StreamReader) -> Result[str, Error] {
     if end >= source.byte_len() {
         ret Result::Err(stream_error(reader, "unterminated string"))
     }
-    charge_decode(reader.budget, end - start + 1, 2)?
+    reader.budget.charge(end - start + 1, 2)?
     let pair = match parse_string(reader.parser) {
         Ok(pair) => pair
         Err(error) => {
@@ -1903,7 +1906,7 @@ fn stream_atom(reader: mut StreamReader) -> Result[Json, Error] {
         }
         let start = reader.parser.index
         let length = next.index - start
-        charge_decode(reader.budget, length, 1)?
+        reader.budget.charge(length, 1)?
         let value = Json::Number(reader.parser.source.slice_bytes(start, length))
         reader.parser = next
         ret Result::Ok(value)
@@ -1965,13 +1968,13 @@ fn stream_value[Value](info: TypeInfo[Value], reader: mut StreamReader, depth: u
     }
     match info.kind() {
         Kind::Struct => {
-            charge_decode(reader.budget, 1, 256)?
+            reader.budget.charge(1, 256)?
             for field in info.fields() {
-                charge_decode(reader.budget, 1, field.type().size_bound() + 16)?
+                reader.budget.charge(1, field.type().size_bound() + 16)?
             }
-            charge_decode(reader.budget, 1, 4096)?
+            reader.budget.charge(1, 4096)?
             for field in info.fields() {
-                charge_decode(reader.budget, 1, 256)?
+                reader.budget.charge(1, 256)?
             }
             let names = schema_index(info)?
             let mut seen = Dict[usize, bool]::with_capacity(0)
@@ -2025,9 +2028,9 @@ fn stream_value[Value](info: TypeInfo[Value], reader: mut StreamReader, depth: u
             }
         }
         Kind::Tuple => {
-            charge_decode(reader.budget, 1, 256)?
+            reader.budget.charge(1, 256)?
             for field in info.fields() {
-                charge_decode(reader.budget, 1, field.type().size_bound() + 16)?
+                reader.budget.charge(1, field.type().size_bound() + 16)?
             }
             stream_expect(reader, 91)?
             let mut builder = reflect::Builder[Value]::new()
@@ -2073,7 +2076,7 @@ fn stream_value[Value](info: TypeInfo[Value], reader: mut StreamReader, depth: u
                 if reader.budget.limits.max_collection_items() == 0 {
                     ret Result::Err(limit())
                 }
-                charge_decode(reader.budget, 1, 128)?
+                reader.budget.charge(1, 128)?
                 stream_expect(reader, 123)?
                 let name = stream_string(reader)?
                 stream_expect(reader, 58)?
@@ -2101,7 +2104,7 @@ fn stream_value[Value](info: TypeInfo[Value], reader: mut StreamReader, depth: u
 }
 fn stream_vec[Item](info: TypeInfo[Item], reader: mut StreamReader, depth: usize) -> Result[Vec[Item], Error] {
     stream_expect(reader, 91)?
-    charge_decode(reader.budget, 1, 256)?
+    reader.budget.charge(1, 256)?
     let mut out = Vec[Item]::new()
     let mut count = 0_usize
     while stream_more(reader, 93, count)? {
@@ -2111,7 +2114,7 @@ fn stream_vec[Item](info: TypeInfo[Item], reader: mut StreamReader, depth: usize
             } else {
                 out.capacity() * 2
             }
-            charge_decode(reader.budget, capacity, info.size_bound() + 16)?
+            reader.budget.charge(capacity, info.size_bound() + 16)?
         }
         match stream_value(info, reader, depth + 1) {
             Ok(value) => {
@@ -2134,7 +2137,7 @@ fn stream_option[Item](info: TypeInfo[Item], reader: mut StreamReader, depth: us
 }
 fn stream_dict[Item](info: TypeInfo[Item], reader: mut StreamReader, depth: usize) -> Result[Dict[str, Item], Error] {
     stream_expect(reader, 123)?
-    charge_decode(reader.budget, 1, 4096)?
+    reader.budget.charge(1, 4096)?
     let mut out = Dict[str, Item]::with_capacity(0)
     let mut count = 0_usize
     while stream_more(reader, 125, count)? {
@@ -2149,7 +2152,7 @@ fn stream_dict[Item](info: TypeInfo[Item], reader: mut StreamReader, depth: usiz
             } else {
                 out.capacity() * 2
             }
-            charge_decode(reader.budget, capacity, info.size_bound() + 128)?
+            reader.budget.charge(capacity, info.size_bound() + 128)?
         }
         match stream_value(info, reader, depth + 1) {
             Ok(value) => {
