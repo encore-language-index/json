@@ -1958,8 +1958,11 @@ fn stream_value[Value](info: TypeInfo[Value], reader: mut StreamReader, depth: u
         Kind::Struct => {
             charge_record(info, reader.budget)?
             charge_decode(reader.budget, 1, 4096)?
+            for field in info.fields() {
+                charge_decode(reader.budget, 1, 256)?
+            }
             let names = schema_index(info)?
-            let mut seen = Dict[usize, bool]::new()
+            let mut seen = Dict[usize, bool]::with_capacity(0)
             let mut builder = reflect::Builder[Value]::new()
             stream_expect(reader, 123)?
             let mut count = 0_usize
@@ -2052,6 +2055,10 @@ fn stream_value[Value](info: TypeInfo[Value], reader: mut StreamReader, depth: u
                     }
                 }
             } else {
+                if reader.budget.limits.max_collection_items() == 0 {
+                    ret Result::Err(limit())
+                }
+                charge_decode(reader.budget, 1, 128)?
                 stream_expect(reader, 123)?
                 let name = stream_string(reader)?
                 stream_expect(reader, 58)?
@@ -2079,11 +2086,14 @@ fn stream_value[Value](info: TypeInfo[Value], reader: mut StreamReader, depth: u
 }
 fn stream_vec[Item](info: TypeInfo[Item], reader: mut StreamReader, depth: usize) -> Result[Vec[Item], Error] {
     stream_expect(reader, 91)?
-    charge_decode(reader.budget, 1, 64)?
+    charge_decode(reader.budget, 1, 256)?
     let mut out = Vec[Item]::new()
     let mut count = 0_usize
     while stream_more(reader, 93, count)? {
-        charge_decode(reader.budget, 2, info.size_bound() + 16)?
+        if out.len() == out.capacity() {
+            let capacity = if out.capacity() == 0 { 4_usize } else { out.capacity() * 2 }
+            charge_decode(reader.budget, capacity, info.size_bound() + 16)?
+        }
         match stream_value(info, reader, depth + 1) {
             Ok(value) => {
                 out.push(value)
@@ -2106,7 +2116,7 @@ fn stream_option[Item](info: TypeInfo[Item], reader: mut StreamReader, depth: us
 fn stream_dict[Item](info: TypeInfo[Item], reader: mut StreamReader, depth: usize) -> Result[Dict[str, Item], Error] {
     stream_expect(reader, 123)?
     charge_decode(reader.budget, 1, 4096)?
-    let mut out = Dict[str, Item]::new()
+    let mut out = Dict[str, Item]::with_capacity(0)
     let mut count = 0_usize
     while stream_more(reader, 125, count)? {
         let name = stream_string(reader)?
@@ -2114,7 +2124,10 @@ fn stream_dict[Item](info: TypeInfo[Item], reader: mut StreamReader, depth: usiz
         if out.contains_key(name) {
             ret Result::Err(Error::new(ErrorKind::DuplicateField, "duplicate dictionary key").at(name))
         }
-        charge_decode(reader.budget, 2, info.size_bound() + 128)?
+        if out.len() == out.capacity() {
+            let capacity = if out.capacity() == 0 { 4_usize } else { out.capacity() * 2 }
+            charge_decode(reader.budget, capacity, info.size_bound() + 128)?
+        }
         match stream_value(info, reader, depth + 1) {
             Ok(value) => {
                 out.insert(name, value)
@@ -2128,7 +2141,7 @@ fn stream_dict[Item](info: TypeInfo[Item], reader: mut StreamReader, depth: usiz
     ret Result::Ok(out)
 }
 fn schema_index[Value](info: TypeInfo[Value]) -> Result[Dict[str, usize], Error] {
-    let mut names = Dict[str, usize]::new()
+    let mut names = Dict[str, usize]::with_capacity(0)
     for field in info.fields() {
         let name = field.attribute("serialize.rename").unwrap_or(field.name())
         if names.insert(name, field.index()).is_some() {
